@@ -1,16 +1,14 @@
-
-const {
-  GoogleGenerativeAI,
-  HarmCategory,
-  HarmBlockThreshold,
-} = require("@google/generative-ai");
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 
 const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+if (!apiKey) {
+  throw new Error("❌ Missing NEXT_PUBLIC_GEMINI_API_KEY in environment variables.");
+}
+
 const genAI = new GoogleGenerativeAI(apiKey);
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
-});
+// ✅ Use a valid model name
+const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
 const generationConfig = {
   temperature: 1,
@@ -31,7 +29,20 @@ const safetySettings = [
   },
 ];
 
-export const chatSession = model.startChat({
-  generationConfig,
-  safetySettings
-});
+// ✅ Updated: direct model call (no startChat needed for single messages)
+export async function sendMessageToGemini(prompt) {
+  try {
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig,
+      safetySettings,
+    });
+
+    const responseText = result.response.text();
+    console.log("✅ Gemini Response:", responseText);
+    return responseText;
+  } catch (error) {
+    console.error("🔥 Gemini API Error:", error);
+    throw error;
+  }
+}

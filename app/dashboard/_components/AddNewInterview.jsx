@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { chatSession } from "@/utils/GeminiAIModal";
+import { sendMessageToGemini } from "@/utils/GeminiAIModal"; // ✅ updated import
 import { LoaderCircle } from "lucide-react";
 import { db } from "@/utils/db";
 import { MockInterview } from "@/utils/schema";
@@ -33,49 +33,53 @@ const AddNewInterview = () => {
   const router = useRouter();
 
   const onSubmit = async (e) => {
-    setLoading(true);
     e.preventDefault();
-    console.log(jobPosition, jobDesc, jobExperience);
+    setLoading(true);
 
     const InputPrompt = `
-  Job Positions: ${jobPosition}, 
-  Job Description: ${jobDesc}, 
-  Years of Experience: ${jobExperience}. 
-  Based on this information, please provide 5 interview questions with answers in JSON format, ensuring "Question" and "Answer" are fields in the JSON.
-`;
+      Job Position: ${jobPosition},
+      Job Description: ${jobDesc},
+      Years of Experience: ${jobExperience}.
+      Based on this, generate 5 interview questions with answers in pure JSON format having "Question" and "Answer" fields.
+    `;
 
-    const result = await chatSession.sendMessage(InputPrompt);
-    const MockJsonResp = result.response
-      .text()
-      .replace("```json", "")
-      .replace("```", "")
-      .trim();
-    console.log(JSON.parse(MockJsonResp));
-    setJsonResponse(MockJsonResp);
+    try {
+      const aiResponse = await sendMessageToGemini(InputPrompt);
+      const cleanedResponse = aiResponse
+        .replace("```json", "")
+        .replace("```", "")
+        .trim();
 
-    if (MockJsonResp) {
-      const resp = await db
-        .insert(MockInterview)
-        .values({
-          mockId: uuidv4(),
-          jsonMockResp: MockJsonResp,
-          jobPosition: jobPosition,
-          jobDesc: jobDesc,
-          jobExperience: jobExperience,
-          createdBy: user?.primaryEmailAddress?.emailAddress,
-          createdAt: moment().format("DD-MM-YYYY"),
-        })
-        .returning({ mockId: MockInterview.mockId });
-        
-      console.log("Inserted ID:", resp);
+      console.log("🧩 Parsed Response:", cleanedResponse);
+      setJsonResponse(cleanedResponse);
 
-      if (resp) {
-        setOpenDialog(false);
-        router.push("/dashboard/interview/" + resp[0]?.mockId);
+      if (cleanedResponse) {
+        const resp = await db
+          .insert(MockInterview)
+          .values({
+            mockId: uuidv4(),
+            jsonMockResp: cleanedResponse,
+            jobPosition: jobPosition,
+            jobDesc: jobDesc,
+            jobExperience: jobExperience,
+            createdBy: user?.primaryEmailAddress?.emailAddress,
+            createdAt: moment().format("DD-MM-YYYY"),
+          })
+          .returning({ mockId: MockInterview.mockId });
+
+        console.log("✅ Inserted ID:", resp);
+        if (resp?.length > 0) {
+          setOpenDialog(false);
+          router.push("/dashboard/interview/" + resp[0]?.mockId);
+        }
+      } else {
+        console.error("⚠️ No response generated");
       }
-    } else {
-      console.log("ERROR");
+    } catch (error) {
+      console.error("🔥 Error generating interview:", error);
+      alert("Failed to generate interview. Check console for details.");
     }
+
     setLoading(false);
   };
 

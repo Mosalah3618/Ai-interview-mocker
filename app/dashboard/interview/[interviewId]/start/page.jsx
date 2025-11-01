@@ -18,16 +18,42 @@ const StartInterview = ({ params }) => {
   }, []);
 
   const GetInterviewDetails = async () => {
+  try {
     const result = await db
       .select()
       .from(MockInterview)
       .where(eq(MockInterview.mockId, params.interviewId));
 
-    const jsonMockResp = JSON.parse(result[0].jsonMockResp);
-    console.log(jsonMockResp);
+    if (!result || result.length === 0) {
+      console.error("No interview data found for:", params.interviewId);
+      return;
+    }
+
+    let raw = result[0].jsonMockResp;
+
+    // 🧹 Clean unwanted characters before parsing
+    if (typeof raw === "string") {
+      raw = raw.trim()
+        .replace(/^[^\[{]*/, "") // remove anything before JSON starts
+        .replace(/[^}\]]*$/, ""); // remove anything after JSON ends
+    }
+
+    let jsonMockResp;
+    try {
+      jsonMockResp = JSON.parse(raw);
+    } catch (err) {
+      console.error("❌ JSON parse failed. Raw value:", raw);
+      jsonMockResp = [];
+    }
+
+    console.log("✅ Parsed JSON:", jsonMockResp);
+
     setMockInterviewQuestion(jsonMockResp);
     setInterviewData(result[0]);
-  };
+  } catch (error) {
+    console.error("❌ Error fetching interview details:", error);
+  }
+};
 
   return (
     <div>

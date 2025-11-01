@@ -70,7 +70,7 @@ const RecordAnswerSection = ({
   const transcribeAudio = async (audioBlob) => {
     try {
       setLoading(true);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       
       // Convert audio blob to base64
       const reader = new FileReader();
@@ -95,55 +95,73 @@ const RecordAnswerSection = ({
   };
 
   const updateUserAnswer = async () => {
+  try {
+    setLoading(true);
+
+    const feedbackPrompt =
+      "Question:" +
+      mockInterviewQuestion[activeQuestionIndex]?.Question +
+      ", User Answer:" +
+      userAnswer +
+      " . Based on the question and answer, give a JSON output only in this format: " +
+      `{
+        "rating": <number between 1 and 10>,
+        "feedback": "3-5 lines feedback for improvement",
+        "correct_answer": {
+          "Explanation": "short correct explanation",
+          "Example": "example if applicable"
+        }
+      }`;
+
+    // ✅ create model instance
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    // ✅ generate feedback
+    const result = await model.generateContent(feedbackPrompt);
+    let MockJsonResp = result.response.text();
+    console.log("Gemini Response:", MockJsonResp);
+
+    // ✅ clean the markdown wrapper
+    MockJsonResp = MockJsonResp.replace(/```json|```/g, "").trim();
+
+    let jsonFeedbackResp;
     try {
-      setLoading(true);
-      const feedbackPrompt =
-        "Question:" +
-        mockInterviewQuestion[activeQuestionIndex]?.Question +
-        ", User Answer:" +
-        userAnswer +
-        " , Depends on question and user answer for given interview question" +
-        " please give us rating for answer and feedback as area of improvement if any " +
-        "in just 3 to 5 lines to improve it in JSON format with rating field and feedback field";
-
-      const result = await chatSession.sendMessage(feedbackPrompt);
-
-      let MockJsonResp = result.response.text();
-      console.log(MockJsonResp);
-
-      // Removing possible extra text around JSON
-      MockJsonResp = MockJsonResp.replace("```json", "").replace("```", "");
-
-      // Attempt to parse JSON
-      let jsonFeedbackResp;
-      try {
-        jsonFeedbackResp = JSON.parse(MockJsonResp);
-      } catch (e) {
-        throw new Error("Invalid JSON response: " + MockJsonResp);
-      }
-
-      const resp = await db.insert(UserAnswer).values({
-        mockIdRef: interviewData?.mockId,
-        question: mockInterviewQuestion[activeQuestionIndex]?.Question,
-        correctAns: mockInterviewQuestion[activeQuestionIndex]?.Answer,
-        userAns: userAnswer,
-        feedback: jsonFeedbackResp?.feedback,
-        rating: jsonFeedbackResp?.rating,
-        userEmail: user?.primaryEmailAddress?.emailAddress,
-        createdAt: moment().format("YYYY-MM-DD"),
-      });
-
-      if (resp) {
-        toast("User Answer recorded successfully");
-      }
-      setUserAnswer("");
-      setLoading(false);
-    } catch (error) {
-      console.error(error);
-      toast("An error occurred while recording the user answer");
-      setLoading(false);
+      jsonFeedbackResp = JSON.parse(MockJsonResp);
+    } catch (e) {
+      throw new Error("Invalid JSON response: " + MockJsonResp);
     }
-  };
+
+    // ✅ flatten correct answer if it's nested
+    let cleanCorrectAnswer = mockInterviewQuestion[activeQuestionIndex]?.Answer;
+    if (typeof cleanCorrectAnswer === "object") {
+      cleanCorrectAnswer = `${cleanCorrectAnswer.Explanation || ""} ${
+        cleanCorrectAnswer.Example ? "Example: " + cleanCorrectAnswer.Example : ""
+      }`.trim();
+    }
+
+    // ✅ save to DB
+    const resp = await db.insert(UserAnswer).values({
+      mockIdRef: interviewData?.mockId,
+      question: mockInterviewQuestion[activeQuestionIndex]?.Question,
+      correctAns: cleanCorrectAnswer,
+      userAns: userAnswer,
+      feedback: jsonFeedbackResp?.feedback,
+      rating: jsonFeedbackResp?.rating,
+      userEmail: user?.primaryEmailAddress?.emailAddress,
+      createdAt: moment().format("YYYY-MM-DD"),
+    });
+
+    if (resp) toast("User Answer recorded successfully");
+    setUserAnswer("");
+  } catch (error) {
+    console.error("❌ Error while recording user answer:", error);
+    toast("An error occurred while recording the user answer");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   return (
     <div className="flex flex-col items-center justify-center overflow-hidden">
