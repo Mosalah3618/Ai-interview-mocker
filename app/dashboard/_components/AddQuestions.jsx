@@ -61,49 +61,50 @@ const AddQuestions = () => {
     console.log("InputPrompt:", InputPrompt);
 
     try {
-      const result = await chatSession.sendMessage(InputPrompt);
-      const MockQuestionJsonResp = result.response
-        .text()
-        .replace("```json", "")
-        .replace("```", "")
-        .trim();
-      // console.log("Parsed data", JSON.parse(MockQuestionJsonResp));
-      
-      console.log("JSON RESPONSE", MockQuestionJsonResp);
-      // console.log("Parsed RESPONSE", JSON.parse(MockQuestionJsonResp))
+  const result = await chatSession.sendMessage(InputPrompt);
 
-      if (MockQuestionJsonResp) {
-        const resp = await db
-          .insert(Question)
-          .values({
-            mockId: uuidv4(),
-            MockQuestionJsonResp: MockQuestionJsonResp,
-            jobPosition: jobPosition,
-            jobDesc: jobDesc,
-            jobExperience: jobExperience,
-            typeQuestion: typeQuestion,
-            company: company,
-            createdBy: user?.primaryEmailAddress?.emailAddress,
-            createdAt: moment().format("YYYY-MM-DD"),
-          })
-          .returning({ mockId: Question.mockId });
+  // ✅ Make sure to await here
+  const aiText = await result.response.text();
 
-        console.log("Inserted ID:", resp);
+  const MockQuestionJsonResp = aiText
+    .replace("```json", "")
+    .replace("```", "")
+    .trim();
 
-        if (resp) {
-          setOpenDialog(false);
+  console.log("JSON RESPONSE:", MockQuestionJsonResp);
 
-          router.push("/dashboard/pyq/" + resp[0]?.mockId);
-        }
-      } else {
-        console.log("ERROR");
-      }
-    } catch (error) {
-      console.error("Failed to parse JSON:", error.message);
-      alert("There was an error processing the data. Please try again.");
-    } finally {
-      setLoading(false);
+  if (MockQuestionJsonResp) {
+    const resp = await db
+      .insert(Question)
+      .values({
+        mockId: uuidv4(),
+        MockQuestionJsonResp: MockQuestionJsonResp,
+        jobPosition: jobPosition,
+        jobDesc: jobDesc,
+        jobExperience: jobExperience,
+        typeQuestion: typeQuestion,
+        company: company,
+        createdBy: user?.primaryEmailAddress?.emailAddress,
+        createdAt: moment().format("YYYY-MM-DD"),
+      })
+      .returning({ mockId: Question.mockId });
+
+    console.log("Inserted ID:", resp);
+
+    if (resp) {
+      setOpenDialog(false);
+      router.push("/dashboard/pyq/" + resp[0]?.mockId);
     }
+  } else {
+    console.log("ERROR");
+  }
+} catch (error) {
+  console.error("Failed to parse JSON:", error.message);
+  alert("There was an error processing the data. Please try again.");
+} finally {
+  setLoading(false);
+}
+
   };
 
   return (
